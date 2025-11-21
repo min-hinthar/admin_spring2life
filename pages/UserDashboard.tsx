@@ -1,17 +1,20 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/dbService';
-import { Appointment } from '../types';
+import { Appointment, Notification } from '../types';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
-import { Calendar, Clock, Video, Plus } from 'lucide-react';
+import { Calendar, Clock, Video, Plus, Mail, BellRing } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { Link } from 'react-router-dom';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles = {
     pending: 'bg-orange-100 text-orange-800 border-orange-200',
     confirmed: 'bg-teal-100 text-teal-800 border-teal-200',
     cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+    rescheduled: 'bg-sky-100 text-sky-800 border-sky-200',
   };
   // @ts-ignore
   return <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100'}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
@@ -20,20 +23,66 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 export const UserDashboard: React.FC = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Appointment | null>(null);
+  const [action, setAction] = useState<'reschedule' | 'cancel' | null>(null);
+  const [reason, setReason] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newDuration, setNewDuration] = useState(60);
 
   useEffect(() => {
-    if (user) {
-      const data = db.appointments.getByUserId(user.id);
-      setAppointments(data);
+    const load = async () => {
+      if (!user) return;
+      const [apptData, noteData] = await Promise.all([
+        db.appointments.getByUserId(user.id),
+        db.notifications.getByUserId(user.id),
+      ]);
+      setAppointments(apptData);
+      setNotifications(noteData);
       setLoading(false);
-    }
+    };
+    load();
   }, [user]);
 
   if (loading) return <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-teal-500 rounded-full border-t-transparent"></div></div>;
 
   const upcoming = appointments.filter(a => new Date(a.startsAt) > new Date() && a.status !== 'cancelled');
   const past = appointments.filter(a => new Date(a.startsAt) <= new Date() || a.status === 'cancelled');
+
+  const handleCancel = async () => {
+    if (!selected || !user) return;
+    await db.appointments.cancel(selected.id, reason);
+    const [apptData, noteData] = await Promise.all([
+      db.appointments.getByUserId(user.id),
+      db.notifications.getByUserId(user.id),
+    ]);
+    setAppointments(apptData);
+    setNotifications(noteData);
+    setAction(null);
+    setSelected(null);
+    setReason('');
+  };
+
+  const handleReschedule = async () => {
+    if (!selected || !newDate || !user) return;
+    await db.appointments.reschedule(selected.id, newDate, newDuration, selected.notes);
+    const [apptData, noteData] = await Promise.all([
+      db.appointments.getByUserId(user.id),
+      db.notifications.getByUserId(user.id),
+    ]);
+    setAppointments(apptData);
+    setNotifications(noteData);
+    setAction(null);
+    setSelected(null);
+  };
+
+  const formatDateTimeLocal = (iso: string) => {
+    const date = new Date(iso);
+    const off = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - off * 60000);
+    return local.toISOString().slice(0, 16);
+  };
 
   return (
     <div className="space-y-8">
@@ -42,7 +91,7 @@ export const UserDashboard: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Hello, {user?.fullName.split(' ')[0]}</h1>
           <p className="text-gray-500 mt-1">Manage your appointments and care plan.</p>
         </div>
-        <Link to="/dashboard/user/providers">
+        <Link href="/dashboard/user/providers">
           <Button className="shadow-lg shadow-teal-500/30">
             <Plus className="h-4 w-4 mr-2" /> Book New Appointment
           </Button>
@@ -50,7 +99,6 @@ export const UserDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Column */}
         <div className="lg:col-span-2 space-y-6">
            <Card>
               <CardHeader className="flex justify-between items-center border-b-0 pb-0">
@@ -67,7 +115,7 @@ export const UserDashboard: React.FC = () => {
                        </div>
                        <p className="text-gray-500 font-medium">No upcoming sessions</p>
                        <p className="text-sm text-gray-400 mt-1">Ready to schedule your next visit?</p>
-                       <Link to="/dashboard/user/providers" className="mt-4 inline-block">
+                       <Link href="/dashboard/user/providers" className="mt-4 inline-block">
                           <Button variant="outline" size="sm">Find a Provider</Button>
                        </Link>
                     </div>
@@ -99,7 +147,12 @@ export const UserDashboard: React.FC = () => {
                                    {appt.status === 'confirmed' && (
                                      <Button size="sm" className="w-full sm:w-auto">Join Video</Button>
                                    )}
-                                   <Button size="sm" variant="outline" className="w-full sm:w-auto">Reschedule</Button>
+                                   <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => { setSelected(appt); setAction('reschedule'); setNewDate(formatDateTimeLocal(appt.startsAt)); setNewDuration(appt.durationMinutes); }}>
+                                     Reschedule
+                                   </Button>
+                                   <Button size="sm" variant="ghost" className="w-full sm:w-auto text-red-600" onClick={() => {setSelected(appt); setAction('cancel'); }}>
+                                     Cancel
+                                   </Button>
                                 </div>
                              </div>
                           </div>
@@ -135,7 +188,6 @@ export const UserDashboard: React.FC = () => {
            </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
            <div className="bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
               <div className="relative z-10">
@@ -154,34 +206,31 @@ export const UserDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {/* Decorative circle */}
               <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
            </div>
 
            <Card>
-             <CardHeader>
-                <h3 className="font-medium text-gray-900">Your Care Team</h3>
-             </CardHeader>
-             <CardBody>
-                <div className="space-y-4">
-                   {/* Deduplicated list of providers from history */}
-                   {Array.from(new Set(appointments.map(a => a.providerName))).map(name => (
-                      <div key={name} className="flex items-center space-x-3">
-                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
-                            {name.charAt(0)}
-                         </div>
-                         <div>
-                            <p className="text-sm font-medium text-gray-900">{name}</p>
-                            <Link to="/dashboard/user/providers" className="text-xs text-teal-600 hover:underline">Book again</Link>
-                         </div>
-                      </div>
-                   ))}
-                   {appointments.length === 0 && <p className="text-sm text-gray-500">You haven't booked with anyone yet.</p>}
+             <CardHeader className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <BellRing className="h-4 w-4 text-teal-600" />
+                  <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
                 </div>
+                <span className="text-xs text-gray-500">Security-tracked</span>
+             </CardHeader>
+             <CardBody className="space-y-3">
+                {notifications.length === 0 && <p className="text-sm text-gray-500">You're all caught up.</p>}
+                {notifications.slice(0,5).map(note => (
+                  <div key={note.id} className="p-3 rounded-lg border border-gray-100 bg-white flex items-start space-x-3">
+                    <div className="h-8 w-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-700">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800">{note.message}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">{new Date(note.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
              </CardBody>
            </Card>
-        </div>
-      </div>
-    </div>
-  );
-};
+
+           <Card>

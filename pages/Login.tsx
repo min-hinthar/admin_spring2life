@@ -1,17 +1,19 @@
+'use client';
+
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { User, ShieldCheck, Stethoscope } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login, register } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,16 +26,11 @@ export const Login: React.FC = () => {
     setLoading(true);
     try {
       if (mode === 'signin') {
-        await login(email); // Auto-detect role
-        // Redirect based on what the login found (handled by the ProtectedRoute logic or manually here)
-        // For simplicity, we let the App.tsx router redirect logic handle "where to go next" 
-        // but we need to know the role. 
-        // However, context updates async.
-        // We'll just navigate to root and let App router sort it out.
-        navigate('/');
+        await login(email, password);
+        router.replace('/');
       } else {
         await register(email, password, fullName, role);
-        navigate('/');
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
@@ -42,11 +39,11 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleDemoLogin = async (demoEmail: string, demoRole: any) => {
+  const handleDemoLogin = async (demoEmail: string) => {
     setLoading(true);
     try {
-      await login(demoEmail, demoRole);
-      navigate('/');
+      await login(demoEmail, 'password');
+      router.replace('/');
     } catch (e) {
       setError('Demo login failed');
     } finally {
@@ -160,15 +157,15 @@ export const Login: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                 <button onClick={() => handleDemoLogin('jane@example.com', 'user')} className="flex flex-col items-center justify-center p-3 rounded-lg border hover:bg-gray-50 transition-colors">
+                <button onClick={() => handleDemoLogin('jane@example.com')} className="flex flex-col items-center justify-center p-3 rounded-lg border hover:bg-gray-50 transition-colors">
                     <User className="h-5 w-5 text-gray-600 mb-1" />
                     <span className="text-xs text-gray-600">Patient</span>
                  </button>
-                 <button onClick={() => handleDemoLogin('dr.smith@spring2life.com', 'provider')} className="flex flex-col items-center justify-center p-3 rounded-lg border hover:bg-gray-50 transition-colors">
+                <button onClick={() => handleDemoLogin('dr.smith@spring2life.com')} className="flex flex-col items-center justify-center p-3 rounded-lg border hover:bg-gray-50 transition-colors">
                     <Stethoscope className="h-5 w-5 text-gray-600 mb-1" />
                     <span className="text-xs text-gray-600">Provider</span>
                  </button>
-                 <button onClick={() => handleDemoLogin('admin@spring2life.com', 'admin')} className="flex flex-col items-center justify-center p-3 rounded-lg border hover:bg-gray-50 transition-colors">
+                <button onClick={() => handleDemoLogin('admin@spring2life.com')} className="flex flex-col items-center justify-center p-3 rounded-lg border hover:bg-gray-50 transition-colors">
                     <ShieldCheck className="h-5 w-5 text-gray-600 mb-1" />
                     <span className="text-xs text-gray-600">Admin</span>
                  </button>

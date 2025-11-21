@@ -1,30 +1,31 @@
+'use client';
+
 import React from 'react';
+import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, User, Calendar, Shield, LayoutDashboard, Menu, X } from 'lucide-react';
 import { Button } from './ui/Button';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    router.replace('/login');
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => pathname === path;
 
   const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => (
     <Link
-      to={to}
+      href={to}
       onClick={() => setMobileMenuOpen(false)}
       className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-        isActive(to) 
-          ? 'bg-teal-50 text-teal-700' 
-          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        isActive(to) ? 'bg-teal-50 text-teal-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
       }`}
     >
       <Icon className="mr-3 h-5 w-5" />
@@ -34,13 +35,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Navigation Bar */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <Link to="/" className="flex items-center space-x-2">
+                <Link href="/" className="flex items-center space-x-2">
                   <div className="bg-teal-600 p-1.5 rounded-lg">
                      <Shield className="h-6 w-6 text-white" />
                   </div>
@@ -88,7 +88,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </>
               ) : (
                 <div className="space-x-3">
-                  <Link to="/login">
+                  <Link href="/login">
                     <Button variant="secondary" size="sm">Sign in</Button>
                   </Link>
                 </div>
@@ -96,8 +96,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
           </div>
         </div>
-        
-        {/* Mobile Menu */}
+
         {mobileMenuOpen && user && (
            <div className="sm:hidden bg-white border-t border-gray-100 py-2 px-2 space-y-1 shadow-lg">
               {user.role === 'user' && (
@@ -123,7 +122,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         )}
       </nav>
 
-      {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>

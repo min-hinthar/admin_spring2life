@@ -1,10 +1,12 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/dbService';
-import { Appointment, AvailabilitySlot } from '../types';
+import { Appointment, AvailabilitySlot, Notification } from '../types';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Check, X, Clock, User, Settings, Plus, Trash } from 'lucide-react';
+import { Check, X, Clock, User, Settings, Plus, Trash, Bell } from 'lucide-react';
 import { DAYS_OF_WEEK } from '../constants';
 
 export const ProviderDashboard: React.FC = () => {
@@ -14,12 +16,18 @@ export const ProviderDashboard: React.FC = () => {
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const refreshData = () => {
+  const refreshData = async () => {
     if (user && user.role === 'provider') {
-      setAppointments(db.appointments.getByProviderId(user.id));
-      const provider = db.providers.getById(user.id);
+      const [apptData, provider, noteData] = await Promise.all([
+        db.appointments.getByProviderId(user.id),
+        db.providers.getById(user.id),
+        db.notifications.getByUserId(user.id),
+      ]);
+      setAppointments(apptData);
       if (provider) setAvailability(provider.availability);
+      setNotifications(noteData);
       setLoading(false);
     }
   };
@@ -28,18 +36,24 @@ export const ProviderDashboard: React.FC = () => {
     refreshData();
   }, [user]);
 
-  const handleStatusChange = (id: string, status: 'confirmed' | 'cancelled') => {
-    db.appointments.updateStatus(id, status);
+  const handleStatusChange = async (id: string, status: 'confirmed' | 'cancelled') => {
+    await db.appointments.updateStatus(id, status);
     refreshData();
   };
 
-  const handleSaveAvailability = () => {
+  const handleReschedule = async (appt: Appointment) => {
+    const proposed = prompt('Suggest a new start time (YYYY-MM-DD HH:MM):', new Date(appt.startsAt).toISOString().slice(0,16).replace('T',' '));
+    if (!proposed) return;
+    const iso = new Date(proposed.replace(' ', 'T')).toISOString();
+    await db.appointments.reschedule(appt.id, iso, appt.durationMinutes, appt.notes);
+    refreshData();
+  };
+
+  const handleSaveAvailability = async () => {
     if (!user) return;
     setSaving(true);
-    setTimeout(() => {
-      db.providers.updateAvailability(user.id, availability);
-      setSaving(false);
-    }, 600);
+    await db.providers.updateAvailability(user.id, availability);
+    setSaving(false);
   };
 
   const addSlot = (dayIndex: number) => {
@@ -61,7 +75,7 @@ export const ProviderDashboard: React.FC = () => {
   if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin h-8 w-8 border-4 border-teal-600 rounded-full border-t-transparent"></div></div>;
 
   const pending = appointments.filter(a => a.status === 'pending');
-  const confirmed = appointments.filter(a => a.status === 'confirmed' && new Date(a.startsAt) > new Date());
+  const confirmed = appointments.filter(a => ['confirmed', 'rescheduled'].includes(a.status) && new Date(a.startsAt) > new Date());
 
   return (
     <div className="space-y-6">
@@ -112,6 +126,9 @@ export const ProviderDashboard: React.FC = () => {
                         <Button className="flex-1 sm:flex-none justify-center" onClick={() => handleStatusChange(appt.id, 'confirmed')}>
                           Confirm
                         </Button>
+                        <Button variant="ghost" className="flex-1 sm:flex-none justify-center" onClick={() => handleReschedule(appt)}>
+                          Reschedule
+                        </Button>
                       </div>
                     </CardBody>
                   </Card>
@@ -132,6 +149,7 @@ export const ProviderDashboard: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
@@ -151,13 +169,19 @@ export const ProviderDashboard: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {appt.durationMinutes} mins
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-xs">
+                        <span className={`px-2 py-1 rounded-full border text-[11px] ${appt.status === 'rescheduled' ? 'border-sky-200 text-sky-700 bg-sky-50' : 'border-green-200 text-green-700 bg-green-50'}`}>
+                          {appt.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <button className="text-red-600 hover:text-red-900 text-xs border border-red-200 px-2 py-1 rounded hover:bg-red-50" onClick={() => handleStatusChange(appt.id, 'cancelled')}>Cancel</button>
+                        <button className="text-sky-600 hover:text-sky-900 text-xs border border-sky-200 px-2 py-1 rounded hover:bg-sky-50" onClick={() => handleReschedule(appt)}>Reschedule</button>
                       </td>
                     </tr>
                   ))}
                   {confirmed.length === 0 && (
-                    <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">No confirmed upcoming appointments.</td></tr>
+                    <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No confirmed upcoming appointments.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -222,6 +246,35 @@ export const ProviderDashboard: React.FC = () => {
           </Card>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex items-center space-x-2">
+            <Bell className="h-4 w-4 text-teal-600" />
+            <h3 className="text-sm font-semibold text-gray-800">Security & Delivery Notifications</h3>
+          </CardHeader>
+          <CardBody className="space-y-3">
+            {notifications.length === 0 && <p className="text-sm text-gray-500">No new alerts.</p>}
+            {notifications.slice(0,6).map(note => (
+              <div key={note.id} className="p-3 rounded-lg border border-gray-100 bg-white flex justify-between items-start">
+                <p className="text-sm text-gray-800">{note.message}</p>
+                <span className="text-[11px] text-gray-400">{new Date(note.createdAt).toLocaleString()}</span>
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <h3 className="text-sm font-semibold text-gray-800">Telehealth hygiene</h3>
+          </CardHeader>
+          <CardBody className="space-y-2 text-sm text-gray-600">
+            <p>• Only confirm if the patient timezone matches your availability.</p>
+            <p>• Keep cancellation reasons concise for audit logs.</p>
+            <p>• Update availability weekly to avoid overbooking.</p>
+          </CardBody>
+        </Card>
+      </div>
     </div>
   );
 };
