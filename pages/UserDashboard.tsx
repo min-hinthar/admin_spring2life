@@ -1,9 +1,11 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/dbService';
-import { Appointment } from '../types';
+import { Appointment, Notification } from '../types';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
-import { Calendar, Clock, Video, Plus } from 'lucide-react';
+import { Calendar, Clock, Video, Plus, Mail, BellRing } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Link } from 'react-router-dom';
 
@@ -12,6 +14,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     pending: 'bg-orange-100 text-orange-800 border-orange-200',
     confirmed: 'bg-teal-100 text-teal-800 border-teal-200',
     cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+    rescheduled: 'bg-sky-100 text-sky-800 border-sky-200',
   };
   // @ts-ignore
   return <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100'}`}>{status.charAt(0).toUpperCase() + status.slice(1)}</span>;
@@ -20,20 +23,66 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 export const UserDashboard: React.FC = () => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Appointment | null>(null);
+  const [action, setAction] = useState<'reschedule' | 'cancel' | null>(null);
+  const [reason, setReason] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newDuration, setNewDuration] = useState(60);
 
   useEffect(() => {
-    if (user) {
-      const data = db.appointments.getByUserId(user.id);
-      setAppointments(data);
+    const load = async () => {
+      if (!user) return;
+      const [apptData, noteData] = await Promise.all([
+        db.appointments.getByUserId(user.id),
+        db.notifications.getByUserId(user.id),
+      ]);
+      setAppointments(apptData);
+      setNotifications(noteData);
       setLoading(false);
-    }
+    };
+    load();
   }, [user]);
 
   if (loading) return <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-teal-500 rounded-full border-t-transparent"></div></div>;
 
   const upcoming = appointments.filter(a => new Date(a.startsAt) > new Date() && a.status !== 'cancelled');
   const past = appointments.filter(a => new Date(a.startsAt) <= new Date() || a.status === 'cancelled');
+
+  const handleCancel = async () => {
+    if (!selected || !user) return;
+    await db.appointments.cancel(selected.id, reason);
+    const [apptData, noteData] = await Promise.all([
+      db.appointments.getByUserId(user.id),
+      db.notifications.getByUserId(user.id),
+    ]);
+    setAppointments(apptData);
+    setNotifications(noteData);
+    setAction(null);
+    setSelected(null);
+    setReason('');
+  };
+
+  const handleReschedule = async () => {
+    if (!selected || !newDate || !user) return;
+    await db.appointments.reschedule(selected.id, newDate, newDuration, selected.notes);
+    const [apptData, noteData] = await Promise.all([
+      db.appointments.getByUserId(user.id),
+      db.notifications.getByUserId(user.id),
+    ]);
+    setAppointments(apptData);
+    setNotifications(noteData);
+    setAction(null);
+    setSelected(null);
+  };
+
+  const formatDateTimeLocal = (iso: string) => {
+    const date = new Date(iso);
+    const off = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - off * 60000);
+    return local.toISOString().slice(0, 16);
+  };
 
   return (
     <div className="space-y-8">
@@ -99,7 +148,12 @@ export const UserDashboard: React.FC = () => {
                                    {appt.status === 'confirmed' && (
                                      <Button size="sm" className="w-full sm:w-auto">Join Video</Button>
                                    )}
-                                   <Button size="sm" variant="outline" className="w-full sm:w-auto">Reschedule</Button>
+                                   <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => { setSelected(appt); setAction('reschedule'); setNewDate(formatDateTimeLocal(appt.startsAt)); setNewDuration(appt.durationMinutes); }}>
+                                     Reschedule
+                                   </Button>
+                                   <Button size="sm" variant="ghost" className="w-full sm:w-auto text-red-600" onClick={() => { setSelected(appt); setAction('cancel'); }}>
+                                     Cancel
+                                   </Button>
                                 </div>
                              </div>
                           </div>
@@ -159,6 +213,30 @@ export const UserDashboard: React.FC = () => {
            </div>
 
            <Card>
+             <CardHeader className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <BellRing className="h-4 w-4 text-teal-600" />
+                  <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
+                </div>
+                <span className="text-xs text-gray-500">Security-tracked</span>
+             </CardHeader>
+             <CardBody className="space-y-3">
+                {notifications.length === 0 && <p className="text-sm text-gray-500">You're all caught up.</p>}
+                {notifications.slice(0,5).map(note => (
+                  <div key={note.id} className="p-3 rounded-lg border border-gray-100 bg-white flex items-start space-x-3">
+                    <div className="h-8 w-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-700">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800">{note.message}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">{new Date(note.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+             </CardBody>
+           </Card>
+
+           <Card>
              <CardHeader>
                 <h3 className="font-medium text-gray-900">Your Care Team</h3>
              </CardHeader>
@@ -182,6 +260,70 @@ export const UserDashboard: React.FC = () => {
            </Card>
         </div>
       </div>
+
+      {action && selected && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-40 px-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase text-gray-400 tracking-[0.2em]">{action === 'cancel' ? 'Cancel appointment' : 'Reschedule appointment'}</p>
+                <h3 className="text-lg font-semibold text-gray-900">{selected.providerName}</h3>
+                <p className="text-sm text-gray-500">{new Date(selected.startsAt).toLocaleString()}</p>
+              </div>
+              <button className="text-gray-400 hover:text-gray-600" onClick={() => { setAction(null); setSelected(null); }}>
+                ×
+              </button>
+            </div>
+
+            {action === 'cancel' && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Cancellation reason</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Let your provider know why you're cancelling"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <div className="flex justify-end space-x-2">
+                  <Button variant="outline" onClick={() => { setAction(null); setSelected(null); }}>Back</Button>
+                  <Button className="bg-red-600 hover:bg-red-700" onClick={handleCancel}>Confirm cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {action === 'reschedule' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">New date & time</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Session length</label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    value={newDuration}
+                    onChange={(e) => setNewDuration(parseInt(e.target.value))}
+                  >
+                    {[30, 45, 60].map(len => (
+                      <option key={len} value={len}>{len} minutes</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button variant="outline" onClick={() => { setAction(null); setSelected(null); }}>Back</Button>
+                  <Button onClick={handleReschedule}>Submit reschedule</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

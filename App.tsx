@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -19,7 +21,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to their appropriate dashboard
     if (user.role === 'admin') return <Navigate to="/dashboard/admin" replace />;
     if (user.role === 'provider') return <Navigate to="/dashboard/provider" replace />;
     return <Navigate to="/dashboard/user" replace />;
@@ -29,51 +30,51 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
 };
 
 const AppRoutes = () => {
-   const { user } = useAuth();
-   return (
-      <Layout>
-        <Routes>
-          <Route path="/" element={user ? <Navigate to={`/dashboard/${user.role}`} /> : <Navigate to="/login" />} />
-          <Route path="/login" element={<Login />} />
-          
-          {/* User Routes */}
-          <Route path="/dashboard/user" element={
-             <ProtectedRoute allowedRoles={['user']}>
-                <UserDashboard />
-             </ProtectedRoute>
-          } />
-          <Route path="/dashboard/user/providers" element={
-             <ProtectedRoute allowedRoles={['user']}>
-                <ProviderList />
-             </ProtectedRoute>
-          } />
+  const { user } = useAuth();
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={user ? <Navigate to={`/dashboard/${user.role}`} /> : <Navigate to="/login" />} />
+        <Route path="/login" element={<Login />} />
 
-          {/* Provider Routes */}
-          <Route path="/dashboard/provider" element={
-             <ProtectedRoute allowedRoles={['provider']}>
-                <ProviderDashboard />
-             </ProtectedRoute>
-          } />
+        {/* User Routes */}
+        <Route path="/dashboard/user" element={
+          <ProtectedRoute allowedRoles={['user']}>
+            <UserDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard/user/providers" element={
+          <ProtectedRoute allowedRoles={['user']}>
+            <ProviderList />
+          </ProtectedRoute>
+        } />
 
-          {/* Admin Routes */}
-          <Route path="/dashboard/admin" element={
-             <ProtectedRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-             </ProtectedRoute>
-          } />
+        {/* Provider Routes */}
+        <Route path="/dashboard/provider" element={
+          <ProtectedRoute allowedRoles={['provider']}>
+            <ProviderDashboard />
+          </ProtectedRoute>
+        } />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
-   );
-}
+        {/* Admin Routes */}
+        <Route path="/dashboard/admin" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Layout>
+  );
+};
 
 const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
-         <AppRoutes />
+        <AppRoutes />
       </Router>
     </AuthProvider>
   );

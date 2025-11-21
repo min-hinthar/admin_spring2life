@@ -1,7 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
+'use client';
 
-const supabaseUrl = 'https://nfbpqvzcwjtsvxiopznu.supabase.co';
-// Using the anon key for client-side operations
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5mYnBxdnpjd2p0c3Z4aW9wem51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MzIwMDgsImV4cCI6MjA3OTEwODAwOH0.ucMNNYzojBJ9Tm9QQUPAtdqKmluPyODrhzLClDI7zis';
+import { createBrowserClient } from '@supabase/ssr';
+import { Database } from '../types';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase environment variables are missing. Local fallbacks will be used.');
+}
+
+export const supabase = supabaseUrl && supabaseAnonKey
+  ? createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+  : null;
