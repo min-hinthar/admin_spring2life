@@ -15,10 +15,13 @@ export const ProviderDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const refreshData = () => {
+  const refreshData = async () => {
     if (user && user.role === 'provider') {
-      setAppointments(db.appointments.getByProviderId(user.id));
-      const provider = db.providers.getById(user.id);
+      const [apptData, provider] = await Promise.all([
+        db.appointments.getByProviderId(user.id),
+        db.providers.getById(user.id),
+      ]);
+      setAppointments(apptData);
       if (provider) setAvailability(provider.availability);
       setLoading(false);
     }
@@ -28,18 +31,16 @@ export const ProviderDashboard: React.FC = () => {
     refreshData();
   }, [user]);
 
-  const handleStatusChange = (id: string, status: 'confirmed' | 'cancelled') => {
-    db.appointments.updateStatus(id, status);
+  const handleStatusChange = async (id: string, status: 'confirmed' | 'cancelled') => {
+    await db.appointments.updateStatus(id, status);
     refreshData();
   };
 
-  const handleSaveAvailability = () => {
+  const handleSaveAvailability = async () => {
     if (!user) return;
     setSaving(true);
-    setTimeout(() => {
-      db.providers.updateAvailability(user.id, availability);
-      setSaving(false);
-    }, 600);
+    await db.providers.updateAvailability(user.id, availability);
+    setSaving(false);
   };
 
   const addSlot = (dayIndex: number) => {

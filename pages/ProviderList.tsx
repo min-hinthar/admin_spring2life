@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { db } from '../services/dbService';
 import { Card, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -8,11 +8,21 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export const ProviderList: React.FC = () => {
-  const providers = db.providers.getAll();
+  const [providers, setProviders] = useState<ProviderProfile[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<ProviderProfile | null>(null);
   const [bookingStep, setBookingStep] = useState<'select' | 'confirm'>('select');
+  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const load = async () => {
+      const data = await db.providers.getAll();
+      setProviders(data);
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const handleBook = (provider: ProviderProfile) => {
     setSelectedProvider(provider);
@@ -41,10 +51,12 @@ export const ProviderList: React.FC = () => {
     navigate('/dashboard/user');
   };
 
+  if (loading) return <div className="flex justify-center p-6"><div className="animate-spin h-8 w-8 border-4 border-teal-500 rounded-full border-t-transparent"></div></div>;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Find a Care Provider</h1>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {providers.map((provider) => (
           <Card key={provider.id} className="overflow-hidden transition-all hover:shadow-md">

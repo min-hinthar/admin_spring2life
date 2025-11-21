@@ -24,7 +24,7 @@ export const Login: React.FC = () => {
     setLoading(true);
     try {
       if (mode === 'signin') {
-        await login(email); // Auto-detect role
+        await login(email, password);
         // Redirect based on what the login found (handled by the ProtectedRoute logic or manually here)
         // For simplicity, we let the App.tsx router redirect logic handle "where to go next" 
         // but we need to know the role. 
@@ -45,7 +45,7 @@ export const Login: React.FC = () => {
   const handleDemoLogin = async (demoEmail: string, demoRole: any) => {
     setLoading(true);
     try {
-      await login(demoEmail, demoRole);
+      await login(demoEmail, '', demoRole);
       navigate('/');
     } catch (e) {
       setError('Demo login failed');
