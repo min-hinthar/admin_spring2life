@@ -1,13 +1,14 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserProfile, ProviderProfile, Role } from '../types';
 import { db } from '../services/dbService';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 interface AuthContextType {
   user: UserProfile | ProviderProfile | null;
   isAuthenticated: boolean;
-  login: (email: string, role?: Role) => Promise<void>;
+  login: (email: string, password?: string, role?: Role) => Promise<void>;
   register: (email: string, password: string, fullName: string, role: Role) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -17,57 +18,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | ProviderProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const storedId = localStorage.getItem('s2l_session_uid');
-    const storedRole = localStorage.getItem('s2l_session_role');
-
-    if (storedId && storedRole) {
-      const found = storedRole === 'provider' 
-        ? db.providers.getById(storedId) 
-        : db.users.getById(storedId);
-      
-      if (found) setUser(found);
+  const loadProfile = useCallback(async (userId: string) => {
+    const profile = await db.providers.getById(userId) || await db.users.getById(userId);
+    if (profile) {
+      setUser(profile);
+      localStorage.setItem('s2l_session_uid', profile.id);
+      localStorage.setItem('s2l_session_role', profile.role);
     }
-    setIsLoading(false);
   }, []);
 
-  const login = async (email: string, role?: Role) => {
-    setIsLoading(true);
-    await new Promise(r => setTimeout(r, 600)); // Simulate network
-
-    let found: UserProfile | ProviderProfile | undefined;
-
-    // Try to find in users first, then providers if not specified, or specific
-    const userFound = db.users.findByEmail(email);
-    const providerFound = db.providers.findByEmail(email);
-
-    if (role === 'provider') found = providerFound;
-    else if (role === 'user' || role === 'admin') found = userFound;
-    else found = userFound || providerFound; // Auto-detect
-
-    if (found) {
-      setUser(found);
-      localStorage.setItem('s2l_session_uid', found.id);
-      localStorage.setItem('s2l_session_role', found.role);
-    } else {
+  useEffect(() => {
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
+      const sessionUser = data.session?.user;
+      if (sessionUser?.id) {
+        await loadProfile(sessionUser.id);
+      } else {
+        const storedId = localStorage.getItem('s2l_session_uid');
+        if (storedId) await loadProfile(storedId);
+      }
       setIsLoading(false);
-      throw new Error('Invalid email or password');
+    };
+
+    init();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user?.id) {
+        await loadProfile(session.user.id);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, [loadProfile]);
+
+  const login = async (email: string, password = '', role?: Role) => {
+    setIsLoading(true);
+    let authUserId = '';
+    let authError: Error | null = null;
+
+    if (password || isSupabaseConfigured) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      authUserId = data.user?.id || '';
+      if (error) authError = error;
+    }
+
+    const profile = role === 'provider'
+      ? await db.providers.findByEmail(email)
+      : await db.users.findByEmail(email) || await db.providers.findByEmail(email || '');
+
+    if (profile) {
+      setUser(profile);
+      localStorage.setItem('s2l_session_uid', profile.id);
+      localStorage.setItem('s2l_session_role', profile.role);
+    } else if (authUserId) {
+      await loadProfile(authUserId);
+    } else if (authError) {
+      setIsLoading(false);
+      throw authError;
     }
     setIsLoading(false);
   };
 
   const register = async (email: string, password: string, fullName: string, role: Role) => {
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-
-    // Check duplicates
-    if (db.users.findByEmail(email) || db.providers.findByEmail(email)) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
       setIsLoading(false);
-      throw new Error('Email already in use');
+      throw error;
     }
-
-    const newUser: UserProfile = {
-      id: `${role}-${Date.now()}`,
+    const id = data.user?.id || `${role}-${Date.now()}`;
+    const baseProfile: UserProfile = {
+      id,
       email,
       fullName,
       role,
@@ -77,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (role === 'provider') {
       const newProvider: ProviderProfile = {
-        ...newUser,
+        ...baseProfile,
         specialty: 'General Practitioner',
         bio: 'New provider profile.',
         telehealth: true,
@@ -85,19 +108,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isActive: true,
         availability: []
       };
-      db.providers.create(newProvider);
-      setUser(newProvider);
+      const created = await db.providers.create(newProvider);
+      setUser(created);
     } else {
-      db.users.create(newUser);
-      setUser(newUser);
+      const created = await db.users.create(baseProfile);
+      setUser(created);
     }
 
-    localStorage.setItem('s2l_session_uid', newUser.id);
+    localStorage.setItem('s2l_session_uid', id);
     localStorage.setItem('s2l_session_role', role);
     setIsLoading(false);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     localStorage.removeItem('s2l_session_uid');
     localStorage.removeItem('s2l_session_role');

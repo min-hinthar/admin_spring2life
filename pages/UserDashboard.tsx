@@ -23,11 +23,14 @@ export const UserDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      const data = db.appointments.getByUserId(user.id);
-      setAppointments(data);
-      setLoading(false);
-    }
+    const load = async () => {
+      if (user) {
+        const data = await db.appointments.getByUserId(user.id);
+        setAppointments(data);
+        setLoading(false);
+      }
+    };
+    load();
   }, [user]);
 
   if (loading) return <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-4 border-teal-500 rounded-full border-t-transparent"></div></div>;

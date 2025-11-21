@@ -1,13 +1,30 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { db } from '../services/dbService';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Users, Calendar, DollarSign, Activity } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
-  const users = db.users.getAll();
-  const providers = db.providers.getAll();
-  const appointments = db.appointments.getAll();
+  const [users, setUsers] = useState([] as Awaited<ReturnType<typeof db.users.getAll>>);
+  const [providers, setProviders] = useState([] as Awaited<ReturnType<typeof db.providers.getAll>>);
+  const [appointments, setAppointments] = useState([] as Awaited<ReturnType<typeof db.appointments.getAll>>);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const [u, p, a] = await Promise.all([
+        db.users.getAll(),
+        db.providers.getAll(),
+        db.appointments.getAll(),
+      ]);
+      setUsers(u);
+      setProviders(p);
+      setAppointments(a);
+      setLoading(false);
+    };
+
+    load();
+  }, []);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
@@ -25,6 +42,8 @@ export const AdminDashboard: React.FC = () => {
     { name: 'Sat', appts: 2 },
     { name: 'Sun', appts: 1 },
   ];
+
+  if (loading) return <div className="flex justify-center p-8"><div className="animate-spin h-8 w-8 border-4 border-teal-500 rounded-full border-t-transparent"></div></div>;
 
   return (
     <div className="space-y-8">
