@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../services/dbService';
 import { Appointment, AvailabilitySlot } from '../types';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Check, X, Clock, User, Settings, Plus, Trash } from 'lucide-react';
 import { DAYS_OF_WEEK } from '../constants';
+import { appointmentApi, providerApi } from '../services/supabaseService';
 
 export const ProviderDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -15,11 +15,21 @@ export const ProviderDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const refreshData = () => {
+  const refreshData = async () => {
     if (user && user.role === 'provider') {
-      setAppointments(db.appointments.getByProviderId(user.id));
-      const provider = db.providers.getById(user.id);
-      if (provider) setAvailability(provider.availability);
+      try {
+        const [apptData, provider] = await Promise.all([
+          appointmentApi.getByProviderId(user.id),
+          providerApi.getById(user.id),
+        ]);
+        setAppointments(apptData);
+        if (provider) setAvailability(provider.availability || []);
+      } catch (error) {
+        console.error('Failed to load provider data', error);
+      } finally {
+        setLoading(false);
+      }
+    } else {
       setLoading(false);
     }
   };
@@ -28,18 +38,25 @@ export const ProviderDashboard: React.FC = () => {
     refreshData();
   }, [user]);
 
-  const handleStatusChange = (id: string, status: 'confirmed' | 'cancelled') => {
-    db.appointments.updateStatus(id, status);
-    refreshData();
+  const handleStatusChange = async (id: string, status: 'confirmed' | 'cancelled') => {
+    try {
+      await appointmentApi.updateStatus(id, status);
+      refreshData();
+    } catch (error) {
+      console.error('Failed to update status', error);
+    }
   };
 
-  const handleSaveAvailability = () => {
+  const handleSaveAvailability = async () => {
     if (!user) return;
     setSaving(true);
-    setTimeout(() => {
-      db.providers.updateAvailability(user.id, availability);
+    try {
+      await providerApi.updateAvailability(user.id, availability);
+    } catch (error) {
+      console.error('Failed to save availability', error);
+    } finally {
       setSaving(false);
-    }, 600);
+    }
   };
 
   const addSlot = (dayIndex: number) => {

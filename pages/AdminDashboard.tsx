@@ -1,13 +1,35 @@
-import React from 'react';
-import { db } from '../services/dbService';
+import React, { useEffect, useState } from 'react';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Users, Calendar, DollarSign, Activity } from 'lucide-react';
+import { adminApi, appointmentApi, providerApi } from '../services/supabaseService';
+import { Appointment, ProviderProfile, UserProfile } from '../types';
 
 export const AdminDashboard: React.FC = () => {
-  const users = db.users.getAll();
-  const providers = db.providers.getAll();
-  const appointments = db.appointments.getAll();
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [providers, setProviders] = useState<ProviderProfile[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [profiles, providerProfiles, appts] = await Promise.all([
+          adminApi.getAllProfiles(),
+          providerApi.getAll(),
+          appointmentApi.getAll(),
+        ]);
+        setUsers(profiles.filter((p) => p.role !== 'provider'));
+        setProviders(providerProfiles);
+        setAppointments(appts);
+      } catch (error) {
+        console.error('Failed to load admin data', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'bg-blue-500' },
@@ -25,6 +47,14 @@ export const AdminDashboard: React.FC = () => {
     { name: 'Sat', appts: 2 },
     { name: 'Sun', appts: 1 },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex justify-center p-12">
+        <div className="animate-spin h-8 w-8 border-4 border-teal-500 rounded-full border-t-transparent"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

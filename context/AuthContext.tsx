@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, ProviderProfile, Role } from '../types';
-import { db } from '../services/dbService';
+import { authApi } from '../services/supabaseService';
 
 interface AuthContextType {
   user: UserProfile | ProviderProfile | null;
   isAuthenticated: boolean;
-  login: (email: string, role?: Role) => Promise<void>;
+  login: (email: string, password?: string, role?: Role) => Promise<void>;
   register: (email: string, password: string, fullName: string, role: Role) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -18,89 +18,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedId = localStorage.getItem('s2l_session_uid');
-    const storedRole = localStorage.getItem('s2l_session_role');
-
-    if (storedId && storedRole) {
-      const found = storedRole === 'provider' 
-        ? db.providers.getById(storedId) 
-        : db.users.getById(storedId);
-      
-      if (found) setUser(found);
-    }
-    setIsLoading(false);
+    const init = async () => {
+      try {
+        const supabaseUser = await authApi.getSessionUser();
+        if (supabaseUser?.id) {
+          const profile = await authApi.getProfile(supabaseUser.id);
+          if (profile) setUser(profile);
+        }
+      } catch (error) {
+        console.error('Failed to restore session', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
   }, []);
 
-  const login = async (email: string, role?: Role) => {
+  const login = async (email: string, password?: string, role?: Role) => {
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 600)); // Simulate network
+    try {
+      const userAuth = await authApi.signIn(email, password || '');
+      if (!userAuth?.id) throw new Error('Invalid credentials');
+      const profile = await authApi.getProfile(userAuth.id);
+      if (!profile) throw new Error('No profile found for this account');
 
-    let found: UserProfile | ProviderProfile | undefined;
+      // If a role is specified, validate it
+      if (role && profile.role !== role) {
+        throw new Error(`This account is not registered as a ${role}`);
+      }
 
-    // Try to find in users first, then providers if not specified, or specific
-    const userFound = db.users.findByEmail(email);
-    const providerFound = db.providers.findByEmail(email);
-
-    if (role === 'provider') found = providerFound;
-    else if (role === 'user' || role === 'admin') found = userFound;
-    else found = userFound || providerFound; // Auto-detect
-
-    if (found) {
-      setUser(found);
-      localStorage.setItem('s2l_session_uid', found.id);
-      localStorage.setItem('s2l_session_role', found.role);
-    } else {
+      setUser(profile);
+    } finally {
       setIsLoading(false);
-      throw new Error('Invalid email or password');
     }
-    setIsLoading(false);
   };
 
   const register = async (email: string, password: string, fullName: string, role: Role) => {
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-
-    // Check duplicates
-    if (db.users.findByEmail(email) || db.providers.findByEmail(email)) {
+    try {
+      const userAuth = await authApi.signUp(email, password, fullName, role);
+      const profile = await authApi.getProfile(userAuth.id!);
+      if (profile) setUser(profile);
+    } finally {
       setIsLoading(false);
-      throw new Error('Email already in use');
     }
-
-    const newUser: UserProfile = {
-      id: `${role}-${Date.now()}`,
-      email,
-      fullName,
-      role,
-      avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`,
-      createdAt: new Date().toISOString()
-    };
-
-    if (role === 'provider') {
-      const newProvider: ProviderProfile = {
-        ...newUser,
-        specialty: 'General Practitioner',
-        bio: 'New provider profile.',
-        telehealth: true,
-        hourlyRate: 100,
-        isActive: true,
-        availability: []
-      };
-      db.providers.create(newProvider);
-      setUser(newProvider);
-    } else {
-      db.users.create(newUser);
-      setUser(newUser);
-    }
-
-    localStorage.setItem('s2l_session_uid', newUser.id);
-    localStorage.setItem('s2l_session_role', role);
-    setIsLoading(false);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await authApi.signOut();
     setUser(null);
-    localStorage.removeItem('s2l_session_uid');
-    localStorage.removeItem('s2l_session_role');
   };
 
   return (
