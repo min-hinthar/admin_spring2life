@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { db } from '../services/dbService';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Video, CalendarCheck, Info, Clock, ShieldCheck } from 'lucide-react';
 import { ProviderProfile } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 interface SlotOption {
   label: string;
@@ -47,7 +47,7 @@ export const ProviderList: React.FC = () => {
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState('');
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     db.providers.getAll().then(setProviders);
@@ -74,7 +74,7 @@ export const ProviderList: React.FC = () => {
     });
 
     setSelectedProvider(null);
-    navigate('/dashboard/user');
+    router.replace('/dashboard/user');
   };
 
   return (
@@ -126,7 +126,6 @@ export const ProviderList: React.FC = () => {
         ))}
       </div>
 
-      {/* Booking Modal */}
       {selectedProvider && (
         <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

@@ -1,19 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { User, ShieldCheck, Stethoscope } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login, register } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,10 +27,10 @@ export const Login: React.FC = () => {
     try {
       if (mode === 'signin') {
         await login(email, password);
-        navigate('/');
+        router.replace('/');
       } else {
         await register(email, password, fullName, role);
-        navigate('/');
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
@@ -43,7 +43,7 @@ export const Login: React.FC = () => {
     setLoading(true);
     try {
       await login(demoEmail, 'password');
-      navigate('/');
+      router.replace('/');
     } catch (e) {
       setError('Demo login failed');
     } finally {

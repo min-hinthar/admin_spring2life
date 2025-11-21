@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/dbService';
 import { Appointment, Notification } from '../types';
 import { Card, CardBody, CardHeader } from '../components/ui/Card';
 import { Calendar, Clock, Video, Plus, Mail, BellRing } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { Link } from 'react-router-dom';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles = {
@@ -91,7 +91,7 @@ export const UserDashboard: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Hello, {user?.fullName.split(' ')[0]}</h1>
           <p className="text-gray-500 mt-1">Manage your appointments and care plan.</p>
         </div>
-        <Link to="/dashboard/user/providers">
+        <Link href="/dashboard/user/providers">
           <Button className="shadow-lg shadow-teal-500/30">
             <Plus className="h-4 w-4 mr-2" /> Book New Appointment
           </Button>
@@ -99,7 +99,6 @@ export const UserDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Column */}
         <div className="lg:col-span-2 space-y-6">
            <Card>
               <CardHeader className="flex justify-between items-center border-b-0 pb-0">
@@ -116,7 +115,7 @@ export const UserDashboard: React.FC = () => {
                        </div>
                        <p className="text-gray-500 font-medium">No upcoming sessions</p>
                        <p className="text-sm text-gray-400 mt-1">Ready to schedule your next visit?</p>
-                       <Link to="/dashboard/user/providers" className="mt-4 inline-block">
+                       <Link href="/dashboard/user/providers" className="mt-4 inline-block">
                           <Button variant="outline" size="sm">Find a Provider</Button>
                        </Link>
                     </div>
@@ -151,7 +150,7 @@ export const UserDashboard: React.FC = () => {
                                    <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => { setSelected(appt); setAction('reschedule'); setNewDate(formatDateTimeLocal(appt.startsAt)); setNewDuration(appt.durationMinutes); }}>
                                      Reschedule
                                    </Button>
-                                   <Button size="sm" variant="ghost" className="w-full sm:w-auto text-red-600" onClick={() => { setSelected(appt); setAction('cancel'); }}>
+                                   <Button size="sm" variant="ghost" className="w-full sm:w-auto text-red-600" onClick={() => {setSelected(appt); setAction('cancel'); }}>
                                      Cancel
                                    </Button>
                                 </div>
@@ -189,7 +188,6 @@ export const UserDashboard: React.FC = () => {
            </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
            <div className="bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
               <div className="relative z-10">
@@ -208,7 +206,6 @@ export const UserDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {/* Decorative circle */}
               <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
            </div>
 
@@ -237,93 +234,3 @@ export const UserDashboard: React.FC = () => {
            </Card>
 
            <Card>
-             <CardHeader>
-                <h3 className="font-medium text-gray-900">Your Care Team</h3>
-             </CardHeader>
-             <CardBody>
-                <div className="space-y-4">
-                   {/* Deduplicated list of providers from history */}
-                   {Array.from(new Set(appointments.map(a => a.providerName))).map(name => (
-                      <div key={name} className="flex items-center space-x-3">
-                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
-                            {name.charAt(0)}
-                         </div>
-                         <div>
-                            <p className="text-sm font-medium text-gray-900">{name}</p>
-                            <Link to="/dashboard/user/providers" className="text-xs text-teal-600 hover:underline">Book again</Link>
-                         </div>
-                      </div>
-                   ))}
-                   {appointments.length === 0 && <p className="text-sm text-gray-500">You haven't booked with anyone yet.</p>}
-                </div>
-             </CardBody>
-           </Card>
-        </div>
-      </div>
-
-      {action && selected && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-40 px-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs uppercase text-gray-400 tracking-[0.2em]">{action === 'cancel' ? 'Cancel appointment' : 'Reschedule appointment'}</p>
-                <h3 className="text-lg font-semibold text-gray-900">{selected.providerName}</h3>
-                <p className="text-sm text-gray-500">{new Date(selected.startsAt).toLocaleString()}</p>
-              </div>
-              <button className="text-gray-400 hover:text-gray-600" onClick={() => { setAction(null); setSelected(null); }}>
-                ×
-              </button>
-            </div>
-
-            {action === 'cancel' && (
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Cancellation reason</label>
-                <textarea
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  rows={3}
-                  placeholder="Let your provider know why you're cancelling"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => { setAction(null); setSelected(null); }}>Back</Button>
-                  <Button className="bg-red-600 hover:bg-red-700" onClick={handleCancel}>Confirm cancel</Button>
-                </div>
-              </div>
-            )}
-
-            {action === 'reschedule' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New date & time</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Session length</label>
-                  <select
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    value={newDuration}
-                    onChange={(e) => setNewDuration(parseInt(e.target.value))}
-                  >
-                    {[30, 45, 60].map(len => (
-                      <option key={len} value={len}>{len} minutes</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => { setAction(null); setSelected(null); }}>Back</Button>
-                  <Button onClick={handleReschedule}>Submit reschedule</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};

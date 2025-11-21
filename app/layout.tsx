@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import React from 'react';
+import { AppProviders } from './providers';
 
 export const metadata: Metadata = {
   title: 'Spring2Life',
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-slate-50 text-slate-900">{children}</body>
+      <body className="bg-slate-50 text-slate-900">
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }
