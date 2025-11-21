@@ -1,44 +1,54 @@
-import React, { useState } from 'react';
-import { db } from '../services/dbService';
+import React, { useEffect, useState } from 'react';
 import { Card, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Video, CalendarCheck, Info } from 'lucide-react';
+import { Video, CalendarCheck } from 'lucide-react';
 import { ProviderProfile } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { appointmentApi, providerApi } from '../services/supabaseService';
 
 export const ProviderList: React.FC = () => {
-  const providers = db.providers.getAll();
+  const [providers, setProviders] = useState<ProviderProfile[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<ProviderProfile | null>(null);
-  const [bookingStep, setBookingStep] = useState<'select' | 'confirm'>('select');
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const loadProviders = async () => {
+      try {
+        const data = await providerApi.getAll();
+        setProviders(data);
+      } catch (error) {
+        console.error('Failed to fetch providers', error);
+      }
+    };
+    loadProviders();
+  }, []);
+
   const handleBook = (provider: ProviderProfile) => {
     setSelectedProvider(provider);
-    setBookingStep('select');
   };
 
-  const confirmBooking = () => {
+  const confirmBooking = async () => {
     if (!selectedProvider || !user) return;
-    
-    // Mock booking logic: Create appt for tomorrow at random time
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(10, 0, 0, 0);
 
-    db.appointments.create({
-       userId: user.id,
-       providerId: selectedProvider.id,
-       startsAt: tomorrow.toISOString(),
-       durationMinutes: 60,
-       status: 'pending',
-       notes: 'Requested via web portal',
-    });
-
-    setBookingStep('select');
-    setSelectedProvider(null);
-    navigate('/dashboard/user');
+    try {
+      await appointmentApi.create({
+        userId: user.id,
+        providerId: selectedProvider.id,
+        startsAt: tomorrow.toISOString(),
+        durationMinutes: 60,
+        notes: 'Requested via web portal',
+      });
+      setSelectedProvider(null);
+      navigate('/dashboard/user');
+    } catch (error) {
+      console.error('Failed to book appointment', error);
+    }
   };
 
   return (
